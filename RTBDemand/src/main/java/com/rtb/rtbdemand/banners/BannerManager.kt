@@ -27,6 +27,7 @@ internal class BannerManager(private val bannerListener: BannerManagerListener) 
     private var wasFirstLook = true
     private val storeService: StoreService by inject()
 
+
     init {
         sdkConfig = storeService.config
         shouldBeActive = !(sdkConfig == null || sdkConfig?.switch != 1)
