@@ -1,31 +1,30 @@
 package com.rtb.rtbdemand.rewardedinterstitial
 
 import android.app.Activity
-import android.util.Log
 import androidx.lifecycle.Observer
 import androidx.work.WorkInfo
-import androidx.work.WorkManager
 import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.admanager.AdManagerAdRequest
 import com.google.android.gms.ads.rewardedinterstitial.RewardedInterstitialAd
 import com.google.android.gms.ads.rewardedinterstitial.RewardedInterstitialAdLoadCallback
 import com.rtb.rtbdemand.common.AdRequest
 import com.rtb.rtbdemand.common.AdTypes
-import com.rtb.rtbdemand.common.TAG
+import com.rtb.rtbdemand.common.LogLevel
 import com.rtb.rtbdemand.intersitial.InterstitialConfig
 import com.rtb.rtbdemand.sdk.ConfigSetWorker
+import com.rtb.rtbdemand.sdk.RTBDemand
 import com.rtb.rtbdemand.sdk.SDKConfig
-import com.rtb.rtbdemand.sdk.StoreService
-import org.koin.core.component.KoinComponent
-import org.koin.core.component.inject
-import org.prebid.mobile.VideoInterstitialAdUnit
+import com.rtb.rtbdemand.sdk.log
+import org.prebid.mobile.InterstitialAdUnit
+import org.prebid.mobile.api.data.AdUnitFormat
+import java.util.EnumSet
 
-internal class RewardedInterstitialAdManager(private val context: Activity, private val adUnit: String) : KoinComponent {
+internal class RewardedInterstitialAdManager(private val context: Activity, private val adUnit: String) {
 
     private var sdkConfig: SDKConfig? = null
     private var config: InterstitialConfig = InterstitialConfig()
     private var shouldBeActive: Boolean = false
-    private val storeService: StoreService by inject()
+    private val storeService = RTBDemand.getStoreService(context)
     private var firstLook: Boolean = true
 
     init {
@@ -70,7 +69,7 @@ internal class RewardedInterstitialAdManager(private val context: Activity, priv
                 }
 
                 override fun onAdFailedToLoad(adError: LoadAdError) {
-                    Log.e(TAG, adError.message)
+                    LogLevel.ERROR.log(adError.message)
                     if (firstLook) {
                         firstLook = false
                         val request = createRequest().getAdRequest()
@@ -85,23 +84,29 @@ internal class RewardedInterstitialAdManager(private val context: Activity, priv
         }
     }
 
+    @Suppress("UNNECESSARY_SAFE_CALL")
     private fun shouldSetConfig(callback: (Boolean) -> Unit) {
-        val workManager: WorkManager by inject()
+        val workManager = RTBDemand.getWorkManager(context)
         val workers = workManager.getWorkInfosForUniqueWork(ConfigSetWorker::class.java.simpleName).get()
         if (workers.isNullOrEmpty()) {
             callback(false)
         } else {
-            val workerData = workManager.getWorkInfoByIdLiveData(workers[0].id)
-            workerData.observeForever(object : Observer<WorkInfo> {
-                override fun onChanged(workInfo: WorkInfo?) {
-                    if (workInfo == null || (workInfo.state != WorkInfo.State.RUNNING && workInfo.state != WorkInfo.State.ENQUEUED)) {
-                        workerData.removeObserver(this)
-                        sdkConfig = storeService.config
-                        shouldBeActive = !(sdkConfig == null || sdkConfig?.switch != 1)
-                        callback(shouldBeActive)
+            try {
+                val workerData = workManager.getWorkInfoByIdLiveData(workers[0].id)
+                workerData?.observeForever(object : Observer<WorkInfo> {
+                    @Suppress("UNNECESSARY_SAFE_CALL")
+                    override fun onChanged(value: WorkInfo) {
+                        if (value?.state != WorkInfo.State.RUNNING && value?.state != WorkInfo.State.ENQUEUED) {
+                            workerData.removeObserver(this)
+                            sdkConfig = storeService.config
+                            shouldBeActive = !(sdkConfig == null || sdkConfig?.switch != 1)
+                            callback(shouldBeActive)
+                        }
                     }
-                }
-            })
+                })
+            } catch (e: Exception) {
+                callback(false)
+            }
         }
     }
 
@@ -111,7 +116,7 @@ internal class RewardedInterstitialAdManager(private val context: Activity, priv
             shouldBeActive = false
             return
         }
-        val validConfig = sdkConfig?.refreshConfig?.firstOrNull { config -> config.specific?.equals(adUnit, true) == true || config.type == AdTypes.REWARD || config.type == "all" }
+        val validConfig = sdkConfig?.refreshConfig?.firstOrNull { config -> config.specific?.equals(adUnit, true) == true || config.type == AdTypes.REWARDEDINTERSTITIAL || config.type == "all" }
         if (validConfig == null) {
             shouldBeActive = false
             return
@@ -141,7 +146,7 @@ internal class RewardedInterstitialAdManager(private val context: Activity, priv
         if (sdkConfig?.prebid?.other != 1) {
             callback()
         } else {
-            val adUnit = VideoInterstitialAdUnit((config.placement?.other ?: 0).toString())
+            val adUnit = InterstitialAdUnit((config.placement?.other ?: 0).toString(), EnumSet.of(AdUnitFormat.VIDEO))
             adUnit.fetchDemand(adRequest) { callback() }
         }
     }

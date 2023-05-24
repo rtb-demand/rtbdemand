@@ -8,7 +8,7 @@ class AdRequest {
 
     private lateinit var adRequest: AdManagerAdRequest
 
-    fun getAdRequest(): AdManagerAdRequest? {
+    internal fun getAdRequest(): AdManagerAdRequest? {
         return if (this::adRequest.isInitialized) {
             adRequest
         } else {
@@ -45,6 +45,11 @@ class AdRequest {
 
         fun build(): AdRequest {
             adRequest = requestBuilder.build()
+            return this@AdRequest
+        }
+
+        fun buildWithRequest(request: AdManagerAdRequest): AdRequest {
+            adRequest = request
             return this@AdRequest
         }
     }

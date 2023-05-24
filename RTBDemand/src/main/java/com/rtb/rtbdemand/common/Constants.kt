@@ -3,7 +3,7 @@ package com.rtb.rtbdemand.common
 internal const val TAG = "Ads"
 
 internal object URLs {
-    const val BASE_URL = "https://prebid.andbeyond.media/"
+     const val BASE_URL = "https://prebid.andbeyond.media/"
 }
 
 object AdTypes {
@@ -12,9 +12,14 @@ object AdTypes {
     const val INLINE = "INLINE"
     const val STICKY = "STICKY"
     const val INREAD = "INREAD"
-    const val INTER = "INTER"
-    const val REWARD = "REWARD"
-    const val REWARDV = "REWARDV"
+    const val INTERSTITIAL = "INTERSTITIAL"
+    const val REWARDEDINTERSTITIAL = "REWARDEDINTERSTITIAL"
+    const val REWARDED = "REWARDED"
+    const val APPOPEN = "APPOPEN"
     const val NATIVE = "NATIVE"
     const val OTHER = "OTHER"
+}
+
+internal enum class LogLevel {
+    DEBUG, INFO, ERROR
 }

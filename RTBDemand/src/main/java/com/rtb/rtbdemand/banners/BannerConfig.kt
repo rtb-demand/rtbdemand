@@ -2,7 +2,7 @@ package com.rtb.rtbdemand.banners
 
 import com.google.android.gms.ads.AdSize
 import com.rtb.rtbdemand.sdk.SDKConfig
-import java.util.*
+import java.util.Date
 
 internal data class BannerConfig(
         var customUnitName: String = "",
@@ -10,6 +10,7 @@ internal data class BannerConfig(
         var publisherAdUnit: String = "",
         var adSizes: List<AdSize> = arrayListOf(),
         var position: Int = 0,
+        var retryConfig: SDKConfig.RetryConfig? = null,
         var newUnit: SDKConfig.LoadConfig? = null,
         var hijack: SDKConfig.LoadConfig? = null,
         var unFilled: SDKConfig.LoadConfig? = null,

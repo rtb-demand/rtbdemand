@@ -2,24 +2,20 @@ package com.rtb.rtbdemand.sdk
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.util.Log
 import androidx.work.*
+import com.appharbr.sdk.configuration.AHSdkConfiguration
+import com.appharbr.sdk.engine.AppHarbr
+import com.appharbr.sdk.engine.InitializationFailureReason
+import com.appharbr.sdk.engine.listeners.OnAppHarbrInitializationCompleteListener
 import com.google.android.gms.ads.MobileAds
 import com.google.gson.Gson
-import com.rtb.rtbdemand.common.TAG
+import com.rtb.rtbdemand.common.LogLevel
 import com.rtb.rtbdemand.common.URLs.BASE_URL
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
-import org.koin.android.ext.koin.androidContext
-import org.koin.core.component.KoinComponent
-import org.koin.core.component.inject
-import org.koin.core.context.startKoin
-import org.koin.dsl.module
 import org.prebid.mobile.Host
 import org.prebid.mobile.PrebidMobile
-import org.prebid.mobile.api.exceptions.InitError
-import org.prebid.mobile.rendering.listeners.SdkInitializationListener
+import org.prebid.mobile.TargetingParams
+import org.prebid.mobile.rendering.models.openrtb.bidRequests.Ext
 import retrofit2.Call
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
@@ -28,55 +24,79 @@ import retrofit2.http.QueryMap
 import java.util.concurrent.TimeUnit
 
 object RTBDemand {
-    fun initialize(context: Context) {
-        startKoin {
-            androidContext(context)
-            modules(sdkModule)
-        }
+    private var storeService: StoreService? = null
+    private var configService: ConfigService? = null
+    private var workManager: WorkManager? = null
+    private var logEnabled = false
+
+    fun initialize(context: Context, logsEnabled: Boolean = false) {
+        this.logEnabled = logsEnabled
         fetchConfig(context)
     }
 
-    private fun fetchConfig(context: Context) {
-        val constraints = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
-        val workerRequest = OneTimeWorkRequestBuilder<ConfigSetWorker>().setConstraints(constraints).build()
-        val workManager = WorkManager.getInstance(context)
-        workManager.enqueueUniqueWork(ConfigSetWorker::class.java.simpleName, ExistingWorkPolicy.REPLACE, workerRequest)
-        workManager.getWorkInfoByIdLiveData(workerRequest.id).observeForever {
-            if (it.state == WorkInfo.State.SUCCEEDED) {
-                SDKManager.initialize(context)
+    internal fun logEnabled() = logEnabled
+
+    internal fun getStoreService(context: Context): StoreService {
+        @Synchronized
+        if (storeService == null) {
+            storeService = StoreService(context.getSharedPreferences(this.toString().substringBefore("@"), Context.MODE_PRIVATE))
+        }
+        return storeService as StoreService
+    }
+
+    internal fun getConfigService(): ConfigService {
+        @Synchronized
+        if (configService == null) {
+            val client = OkHttpClient.Builder()
+                    .connectTimeout(5, TimeUnit.SECONDS)
+                    .writeTimeout(5, TimeUnit.SECONDS)
+                    .readTimeout(5, TimeUnit.SECONDS).hostnameVerifier { _, _ -> true }.build()
+            configService = Retrofit.Builder().baseUrl(BASE_URL).client(client)
+                    .addConverterFactory(GsonConverterFactory.create()).build().create(ConfigService::class.java)
+        }
+        return configService as ConfigService
+    }
+
+    internal fun getWorkManager(context: Context): WorkManager {
+        @Synchronized
+        if (workManager == null) {
+            workManager = WorkManager.getInstance(context)
+        }
+        return workManager as WorkManager
+    }
+
+    private fun fetchConfig(context: Context, delay: Long? = null) {
+        if (delay != null && delay < 900) return
+        try {
+            val constraints = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
+            val workerRequest: OneTimeWorkRequest = delay?.let {
+                OneTimeWorkRequestBuilder<ConfigSetWorker>().setConstraints(constraints).setInitialDelay(it, TimeUnit.SECONDS).build()
+            } ?: kotlin.run {
+                OneTimeWorkRequestBuilder<ConfigSetWorker>().setConstraints(constraints).build()
             }
+            val workManager = getWorkManager(context)
+            val storeService = getStoreService(context)
+            workManager.enqueueUniqueWork(ConfigSetWorker::class.java.simpleName, ExistingWorkPolicy.REPLACE, workerRequest)
+            workManager.getWorkInfoByIdLiveData(workerRequest.id).observeForever {
+                if (it?.state == WorkInfo.State.SUCCEEDED) {
+                    SDKManager.initialize(context)
+                    if (storeService.config != null && storeService.config?.refetch != null) {
+                        fetchConfig(context, storeService.config?.refetch)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            SDKManager.initialize(context)
         }
     }
 }
 
-internal val sdkModule = module {
-
-    single { WorkManager.getInstance(androidContext()) }
-
-    single {
-        StoreService(androidContext().getSharedPreferences(androidContext().packageName, Context.MODE_PRIVATE))
-    }
-
-    single {
-        OkHttpClient.Builder()
-                .connectTimeout(3, TimeUnit.SECONDS)
-                .writeTimeout(3, TimeUnit.SECONDS)
-                .readTimeout(3, TimeUnit.SECONDS).hostnameVerifier { _, _ -> true }.build()
-    }
-
-    single {
-        val client = Retrofit.Builder().baseUrl(BASE_URL).client(get())
-                .addConverterFactory(GsonConverterFactory.create()).build()
-        client.create(ConfigService::class.java)
-    }
-}
-
-internal class ConfigSetWorker(private val context: Context, params: WorkerParameters) : Worker(context, params), KoinComponent {
+internal class ConfigSetWorker(private val context: Context, params: WorkerParameters) : Worker(context, params) {
     override fun doWork(): Result {
-        val storeService: StoreService by inject()
+        val storeService = RTBDemand.getStoreService(context)
         return try {
-            val configService: ConfigService by inject()
-            val response = configService.getConfig(hashMapOf("Name" to context.packageName)).execute()
+            val configService = RTBDemand.getConfigService()
+            val response = configService.getConfig(hashMapOf("name" to context.packageName)).execute()
             if (response.isSuccessful && response.body() != null) {
                 storeService.config = response.body()
                 Result.success()
@@ -86,7 +106,7 @@ internal class ConfigSetWorker(private val context: Context, params: WorkerParam
                 } ?: Result.failure()
             }
         } catch (e: Exception) {
-            Log.e(TAG, e.message ?: "")
+            LogLevel.ERROR.log(e.message ?: "")
             storeService.config?.let {
                 Result.success()
             } ?: Result.failure()
@@ -94,60 +114,49 @@ internal class ConfigSetWorker(private val context: Context, params: WorkerParam
     }
 }
 
-internal class PrebidWorker(private val context: Context, params: WorkerParameters) : CoroutineWorker(context, params), KoinComponent {
-    override suspend fun doWork(): Result {
-        withContext(Dispatchers.Main) {
-            return@withContext try {
-                val storeService: StoreService by inject()
-                val config = storeService.config
-                if (config != null && config.switch == 1) {
-                    PrebidMobile.setPrebidServerHost(Host.createCustomHost(config.prebid?.host ?: ""))
-                    PrebidMobile.setPrebidServerAccountId(config.prebid?.accountId ?: "")
-                    PrebidMobile.initializeSdk(context, object : SdkInitializationListener {
-                        override fun onSdkInit() {
-                            Log.i(TAG, "Prebid Initialized")
-                        }
-
-                        override fun onSdkFailedToInit(error: InitError?) {
-                            Log.e(TAG, error?.error ?: "")
-                        }
-                    })
-                }
-                Result.success()
-            } catch (e: Exception) {
-                Log.e(TAG, e.message ?: "")
-                Result.failure()
-            }
-        }
-        return Result.success()
-    }
-
-}
-
-internal object SDKManager : KoinComponent {
+internal object SDKManager {
 
     fun initialize(context: Context) {
-        val storeService: StoreService by inject()
+        initializeGAM(context)
+        val storeService = RTBDemand.getStoreService(context)
         val config = storeService.config ?: return
         if (config.switch != 1) return
-        PrebidMobile.setPrebidServerHost(Host.createCustomHost(config.prebid?.host ?: ""))
-        PrebidMobile.setPrebidServerAccountId(config.prebid?.accountId ?: "")
-        PrebidMobile.initializeSdk(context, object : SdkInitializationListener {
-            override fun onSdkInit() {
-                Log.i(TAG, "Prebid Initialized")
-            }
+        initializePrebid(context, config.prebid)
+        initializeGeoEdge(context, config.geoEdge?.apiKey)
+    }
 
-            override fun onSdkFailedToInit(error: InitError?) {
-                Log.e(TAG, error?.error ?: "")
-            }
-        })
-        initializeGAM(context)
+    private fun initializePrebid(context: Context, prebid: SDKConfig.Prebid?) {
+        PrebidMobile.setPbsDebug(prebid?.debug == 1)
+        PrebidMobile.setPrebidServerHost(Host.createCustomHost(prebid?.host ?: ""))
+        PrebidMobile.setPrebidServerAccountId(prebid?.accountId ?: "")
+        PrebidMobile.setTimeoutMillis(prebid?.timeout?.toIntOrNull() ?: 1000)
+        PrebidMobile.initializeSdk(context) { LogLevel.INFO.log("Prebid Initialization Completed") }
+        prebid?.schain?.let {
+            TargetingParams.setUserExt(Ext().apply {
+                put("schain", it)
+            })
+        }
     }
 
     private fun initializeGAM(context: Context) {
         MobileAds.initialize(context) {
-            Log.i(TAG, "GAM Initialization complete.")
+            LogLevel.INFO.log("GAM Initialization complete.")
         }
+    }
+
+    private fun initializeGeoEdge(context: Context, apiKey: String?) {
+        if (apiKey.isNullOrEmpty()) return
+        val configuration = AHSdkConfiguration.Builder(apiKey).build()
+        AppHarbr.initialize(context, configuration, object : OnAppHarbrInitializationCompleteListener {
+            override fun onSuccess() {
+                LogLevel.INFO.log("AppHarbr SDK Initialized Successfully")
+            }
+
+            override fun onFailure(reason: InitializationFailureReason) {
+                LogLevel.ERROR.log("AppHarbr SDK Initialization Failed: ${reason.readableHumanReason}")
+            }
+
+        })
     }
 }
 
@@ -167,8 +176,4 @@ internal class StoreService(private val prefs: SharedPreferences) {
         set(value) = prefs.edit().apply {
             value?.let { putString("CONFIG", Gson().toJson(value)) } ?: kotlin.run { remove("CONFIG") }
         }.apply()
-
-    var prebidPending: Boolean
-        get() = prefs.getBoolean("PREBID_PENDING", false)
-        set(value) = prefs.edit().putBoolean("PREBID_PENDING", value).apply()
 }

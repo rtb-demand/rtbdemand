@@ -6,7 +6,14 @@ import com.google.gson.annotations.SerializedName
 internal data class SDKConfig(
         @SerializedName("aff")
         val affiliatedId: Long? = null,
+        val refetch: Long? = null,
+        @SerializedName("retry_config")
+        val retryConfig: RetryConfig? = null,
         val prebid: Prebid? = null,
+        @SerializedName("geoedge")
+        val geoEdge: GeoEdge? = null,
+        @SerializedName("network_block")
+        val networkBlock: String? = null,
         @SerializedName("diff")
         val difference: Int? = null,
         @SerializedName("network")
@@ -40,13 +47,38 @@ internal data class SDKConfig(
         }
     }
 
+    data class RetryConfig(
+            val networks: String? = null,
+            var retries: Int? = null,
+            @SerializedName("retry_interval")
+            val retryInterval: Int? = null,
+            var adUnits: ArrayList<String> = arrayListOf()
+    ) {
+        fun fillAdUnits() {
+            adUnits = arrayListOf<String>().apply {
+                addAll(networks?.replace(" ", "")?.split(",") ?: arrayListOf())
+            }
+        }
+    }
+
     data class Prebid(
             @SerializedName("firstlook")
             val firstLook: Int? = null,
             val other: Int? = null,
             val host: String? = null,
             @SerializedName("accountid")
-            val accountId: String? = null
+            val accountId: String? = null,
+            val timeout: String? = null,
+            val debug: Int = 0,
+            val schain: String? = null
+    )
+
+    data class GeoEdge(
+            @SerializedName("firstlook")
+            val firstLook: Int? = null,
+            val other: Int? = null,
+            @SerializedName("api_key")
+            val apiKey: String? = null
     )
 
     data class RefreshConfig(
@@ -58,7 +90,8 @@ internal data class SDKConfig(
             @SerializedName("pos")
             val position: Int? = null,
             val placement: Placement? = null,
-            val specific: String? = null
+            val specific: String? = null,
+            val expiry: Int? = null
     )
 
     data class Size(
@@ -82,11 +115,11 @@ internal data class SDKConfig(
     )
 
     data class LoadConfigs(
-            @SerializedName("INTER")
+            @SerializedName("INTERSTITIAL")
             val inter: LoadConfig? = null,
-            @SerializedName("REWARD")
+            @SerializedName("REWARDEDINTERSTITIAL")
             val reward: LoadConfig? = null,
-            @SerializedName("REWARDV")
+            @SerializedName("REWARDED")
             val rewardVideos: LoadConfig? = null,
             @SerializedName("NATIVE")
             val native: LoadConfig? = null,
@@ -102,6 +135,8 @@ internal data class SDKConfig(
             val inread: LoadConfig? = null,
             @SerializedName("STICKY")
             val sticky: LoadConfig? = null,
+            @SerializedName("APPOPEN")
+            val appOpen: LoadConfig? = null,
             @SerializedName("ALL")
             val other: LoadConfig? = null
     )

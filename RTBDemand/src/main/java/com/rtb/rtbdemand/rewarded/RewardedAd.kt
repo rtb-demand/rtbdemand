@@ -1,29 +1,69 @@
 package com.rtb.rtbdemand.rewarded
 
 import android.app.Activity
-import android.util.Log
+import com.google.android.gms.ads.AdError
 import com.google.android.gms.ads.rewarded.RewardedAd
 import com.rtb.rtbdemand.common.AdRequest
-import com.rtb.rtbdemand.common.TAG
+import com.rtb.rtbdemand.common.LogLevel
+import com.rtb.rtbdemand.common.ServerSideVerificationOptions
 import com.rtb.rtbdemand.rewardedinterstitial.Reward
+import com.rtb.rtbdemand.sdk.FullScreenContentCallback
+import com.rtb.rtbdemand.sdk.log
 
 class RewardedAd(private val context: Activity, private val adUnit: String) {
     private var rewardedAdManager = RewardedAdManager(context, adUnit)
-    private var mAdManagerInterstitialAd: RewardedAd? = null
+    private var mRewardedAd: RewardedAd? = null
 
     fun load(adRequest: AdRequest, callBack: (loaded: Boolean) -> Unit) {
         rewardedAdManager.load(adRequest) {
-            mAdManagerInterstitialAd = it
-            callBack(mAdManagerInterstitialAd != null)
+            mRewardedAd = it
+            callBack(mRewardedAd != null)
+        }
+    }
+
+    fun setServerSideVerificationOptions(options: ServerSideVerificationOptions) {
+        options.getOptions()?.let {
+            mRewardedAd?.setServerSideVerificationOptions(it)
         }
     }
 
     fun show(callBack: (reward: Reward?) -> Unit) {
-        if (mAdManagerInterstitialAd != null) {
-            mAdManagerInterstitialAd?.show(context) { callBack(Reward(it.amount, it.type)) }
+        if (mRewardedAd != null) {
+            mRewardedAd?.show(context) { callBack(Reward(it.amount, it.type)) }
         } else {
-            Log.e(TAG, "The rewarded interstitial ad wasn't ready yet.")
+            LogLevel.ERROR.log("The rewarded interstitial ad wasn't ready yet.")
             callBack(null)
+        }
+    }
+
+    fun setContentCallback(callback: FullScreenContentCallback) {
+        mRewardedAd?.fullScreenContentCallback = object : com.google.android.gms.ads.FullScreenContentCallback() {
+            override fun onAdClicked() {
+                super.onAdClicked()
+                callback.onAdClicked()
+            }
+
+            override fun onAdDismissedFullScreenContent() {
+                super.onAdDismissedFullScreenContent()
+                mRewardedAd = null
+                callback.onAdDismissedFullScreenContent()
+            }
+
+            override fun onAdFailedToShowFullScreenContent(p0: AdError) {
+                super.onAdFailedToShowFullScreenContent(p0)
+                mRewardedAd = null
+                callback.onAdFailedToShowFullScreenContent(p0.toString())
+            }
+
+            override fun onAdImpression() {
+                super.onAdImpression()
+                callback.onAdImpression()
+            }
+
+            override fun onAdShowedFullScreenContent() {
+                super.onAdShowedFullScreenContent()
+                callback.onAdShowedFullScreenContent()
+            }
         }
     }
 }

@@ -2,20 +2,24 @@ package com.rtb.rtbdemand.banners
 
 import android.content.Context
 import android.util.AttributeSet
-import android.util.Log
 import android.widget.LinearLayout
+import com.appharbr.sdk.engine.AdSdk
+import com.appharbr.sdk.engine.AppHarbr
 import com.google.android.gms.ads.AdListener
 import com.google.android.gms.ads.AdSize
 import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.admanager.AdManagerAdView
-import com.google.gson.Gson
 import com.rtb.rtbdemand.R
 import com.rtb.rtbdemand.common.AdRequest
 import com.rtb.rtbdemand.common.AdTypes
-import com.rtb.rtbdemand.common.TAG
+import com.rtb.rtbdemand.common.LogLevel
 import com.rtb.rtbdemand.databinding.BannerAdViewBinding
-import org.prebid.mobile.PrebidMobile
-import java.util.*
+import com.rtb.rtbdemand.sdk.BannerAdListener
+import com.rtb.rtbdemand.sdk.BannerManagerListener
+import com.rtb.rtbdemand.sdk.log
+import org.prebid.mobile.addendum.AdViewUtils
+import org.prebid.mobile.addendum.PbFindSizeError
+import java.util.Locale
 
 class BannerAdView : LinearLayout, BannerManagerListener {
 
@@ -47,7 +51,7 @@ class BannerAdView : LinearLayout, BannerManagerListener {
 
     private fun init(context: Context, attrs: AttributeSet?) {
         this.mContext = context
-        bannerManager = BannerManager(this)
+        bannerManager = BannerManager(context, this)
         val view = inflate(context, R.layout.banner_ad_view, this)
         binding = BannerAdViewBinding.bind(view)
         attrs?.let {
@@ -88,7 +92,6 @@ class BannerAdView : LinearLayout, BannerManagerListener {
         }
     }
 
-
     fun setAdUnitID(adUnitId: String) {
         this.currentAdUnit = adUnitId
         if (this::currentAdSizes.isInitialized && this::currentAdUnit.isInitialized) {
@@ -111,7 +114,6 @@ class BannerAdView : LinearLayout, BannerManagerListener {
         var adRequest = request.getAdRequest() ?: return false
         fun load() {
             if (this::adView.isInitialized) {
-                checkPrebid()
                 bannerManager.fetchDemand(firstLook, adRequest) { adView.loadAd(adRequest) }
             }
         }
@@ -120,16 +122,21 @@ class BannerAdView : LinearLayout, BannerManagerListener {
                 if (it) {
                     bannerManager.setConfig(currentAdUnit, currentAdSizes as ArrayList<AdSize>, adType)
                     adRequest = bannerManager.checkOverride() ?: adRequest
+                    bannerManager.checkGeoEdge(true) { addGeoEdge() }
                 }
                 load()
             }
-        } else load()
+        } else {
+            bannerManager.checkGeoEdge(false) { addGeoEdge() }
+            load()
+        }
         return true
     }
 
-    private fun checkPrebid() {
-        Log.d(TAG, "checkPrebid: ${PrebidMobile.getPrebidServerAccountId()}")
-        Log.d(TAG, "checkPrebid: ${Gson().toJson(PrebidMobile.isSdkInitialized())}")
+    private fun addGeoEdge() {
+        AppHarbr.addBannerView(AdSdk.GAM, adView) { _, _, _, reasons ->
+            LogLevel.INFO.log("AppHarbr - On Banner Blocked $reasons")
+        }
     }
 
     override fun onVisibilityAggregated(isVisible: Boolean) {
@@ -152,24 +159,40 @@ class BannerAdView : LinearLayout, BannerManagerListener {
         override fun onAdFailedToLoad(p0: LoadAdError) {
             super.onAdFailedToLoad(p0)
             bannerAdListener?.onAdFailedToLoad(p0.toString())
+            val tempStatus = firstLook
             if (firstLook) {
                 firstLook = false
-                bannerManager.adFailedToLoad()
+            }
+            try {
+                bannerManager.adFailedToLoad(tempStatus)
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
         }
 
         override fun onAdImpression() {
-            bannerAdListener?.onAdImpression()
             super.onAdImpression()
+            bannerAdListener?.onAdImpression()
+            bannerManager.adLoaded(firstLook, adView.responseInfo?.loadedAdapterResponseInfo)
+            if (firstLook) {
+                firstLook = false
+            }
         }
 
         override fun onAdLoaded() {
             super.onAdLoaded()
             bannerAdListener?.onAdLoaded()
-            bannerManager.adLoaded(firstLook)
+            bannerManager.adLoaded(firstLook, adView.responseInfo?.loadedAdapterResponseInfo)
             if (firstLook) {
                 firstLook = false
             }
+            AdViewUtils.findPrebidCreativeSize(adView, object : AdViewUtils.PbFindSizeListener {
+                override fun success(width: Int, height: Int) {
+                    adView.setAdSizes(AdSize(width, height))
+                }
+
+                override fun failure(error: PbFindSizeError) {}
+            })
         }
 
         override fun onAdOpened() {
@@ -179,17 +202,23 @@ class BannerAdView : LinearLayout, BannerManagerListener {
     }
 
     fun pauseAd() {
-        adView.pause()
-        bannerManager.adPaused()
+        if (this::adView.isInitialized) {
+            adView.pause()
+            bannerManager.adPaused()
+        }
     }
 
     fun resumeAd() {
-        adView.resume()
-        bannerManager.adResumed()
+        if (this::adView.isInitialized) {
+            adView.resume()
+            bannerManager.adResumed()
+        }
     }
 
     fun destroyAd() {
-        adView.destroy()
-        bannerManager.adDestroyed()
+        if (this::adView.isInitialized) {
+            adView.destroy()
+            bannerManager.adDestroyed()
+        }
     }
 }
