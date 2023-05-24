@@ -32,6 +32,7 @@ internal class BannerManager(private val context: Context, private val bannerLis
     private var isForegroundRefresh = 1
     private var overridingUnit: String? = null
 
+
     init {
         sdkConfig = storeService.config
         shouldBeActive = !(sdkConfig == null || sdkConfig?.switch != 1)
