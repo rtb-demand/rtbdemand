@@ -7,7 +7,7 @@ android {
     compileSdk 32
 
     defaultConfig {
-        applicationId "com.rtb.rtbdemand"
+        applicationId "com.rtb.andbeyondmedia"
         minSdk 21
         targetSdk 32
         versionCode 1
@@ -32,7 +32,7 @@ android {
     buildFeatures {
         viewBinding true
     }
-    namespace 'com.rtb.rtbdemand'
+    namespace 'com.rtb.andbeyondmedia'
 }
 ext {
     lifecycle_version = '2.5.1'

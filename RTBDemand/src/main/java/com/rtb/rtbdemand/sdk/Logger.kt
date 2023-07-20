@@ -1,15 +1,38 @@
 package com.rtb.rtbdemand.sdk
 
 import android.util.Log
-import com.rtb.rtbdemand.common.LogLevel
+import android.view.View
 import com.rtb.rtbdemand.common.TAG
 
+internal enum class Logger {
+    DEBUG, INFO, ERROR
+}
 
-internal fun LogLevel.log(msg: String) {
-    if (!RTBDemand.logEnabled()) return
+internal fun Logger.log(tag: String = TAG, msg: String) {
+    if (!RTBDemand.logEnabled) return
     when (this) {
-        LogLevel.INFO -> Log.i(TAG, msg)
-        LogLevel.DEBUG -> Log.d(TAG, msg)
-        LogLevel.ERROR -> Log.e(TAG, msg)
+        Logger.INFO -> Log.i(tag, msg)
+        Logger.DEBUG -> Log.d(tag, msg)
+        Logger.ERROR -> Log.e(tag, msg)
+    }
+}
+
+internal fun log(getMessage: () -> String) {
+    if (!RTBDemand.specialTag.isNullOrEmpty()) {
+        try {
+            Log.i(RTBDemand.specialTag, getMessage())
+        } catch (e: Throwable) {
+            e.printStackTrace()
+        }
+    }
+}
+
+internal fun View?.log(getMessage: () -> String) {
+    if (!RTBDemand.specialTag.isNullOrEmpty()) {
+        try {
+            Log.i(RTBDemand.specialTag, String.format("%d-%s", this?.id ?: -1, getMessage()))
+        } catch (e: Throwable) {
+            e.printStackTrace()
+        }
     }
 }

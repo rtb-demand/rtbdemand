@@ -4,9 +4,9 @@ import android.app.Activity
 import com.google.android.gms.ads.AdError
 import com.google.android.gms.ads.rewardedinterstitial.RewardedInterstitialAd
 import com.rtb.rtbdemand.common.AdRequest
-import com.rtb.rtbdemand.common.LogLevel
 import com.rtb.rtbdemand.common.ServerSideVerificationOptions
 import com.rtb.rtbdemand.sdk.FullScreenContentCallback
+import com.rtb.rtbdemand.sdk.Logger
 import com.rtb.rtbdemand.sdk.log
 
 class RewardedInterstitialAd(private val context: Activity, private val adUnit: String) {
@@ -30,7 +30,7 @@ class RewardedInterstitialAd(private val context: Activity, private val adUnit: 
         if (mInterstitialRewardedAd != null) {
             mInterstitialRewardedAd?.show(context) { callBack(Reward(it.amount, it.type)) }
         } else {
-            LogLevel.ERROR.log("The rewarded interstitial ad wasn't ready yet.")
+            Logger.ERROR.log(msg = "The rewarded interstitial ad wasn't ready yet.")
             callBack(null)
         }
     }

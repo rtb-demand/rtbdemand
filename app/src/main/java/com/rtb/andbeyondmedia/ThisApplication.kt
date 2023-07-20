@@ -1,4 +1,4 @@
-package com.rtb.rtbdemand
+package com.rtb.andbeyondmedia
 
 import android.app.Activity
 import android.app.Application

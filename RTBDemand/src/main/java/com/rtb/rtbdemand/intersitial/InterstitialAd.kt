@@ -4,8 +4,8 @@ import android.app.Activity
 import com.google.android.gms.ads.AdError
 import com.google.android.gms.ads.admanager.AdManagerInterstitialAd
 import com.rtb.rtbdemand.common.AdRequest
-import com.rtb.rtbdemand.common.LogLevel
 import com.rtb.rtbdemand.sdk.FullScreenContentCallback
+import com.rtb.rtbdemand.sdk.Logger
 import com.rtb.rtbdemand.sdk.log
 
 class InterstitialAd(private val context: Activity, private val adUnit: String) {
@@ -23,7 +23,7 @@ class InterstitialAd(private val context: Activity, private val adUnit: String) 
         if (mInterstitialAd != null) {
             mInterstitialAd?.show(context)
         } else {
-            LogLevel.ERROR.log("The interstitial ad wasn't ready yet.")
+            Logger.ERROR.log(msg = "The interstitial ad wasn't ready yet.")
         }
     }
 

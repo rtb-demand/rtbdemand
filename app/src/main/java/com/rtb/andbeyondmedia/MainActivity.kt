@@ -1,13 +1,13 @@
-package com.rtb.rtbdemand
+package com.rtb.andbeyondmedia
 
 import android.os.Bundle
 import android.util.DisplayMetrics
 import androidx.appcompat.app.AppCompatActivity
+import com.rtb.andbeyondmedia.databinding.ActivityMainBinding
 import com.rtb.rtbdemand.banners.BannerAdSize
 import com.rtb.rtbdemand.banners.BannerAdView
 import com.rtb.rtbdemand.common.AdRequest
 import com.rtb.rtbdemand.common.AdTypes
-import com.rtb.rtbdemand.databinding.ActivityMainBinding
 import com.rtb.rtbdemand.intersitial.InterstitialAd
 import com.rtb.rtbdemand.rewardedinterstitial.RewardedInterstitialAd
 

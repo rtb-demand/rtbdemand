@@ -4,22 +4,26 @@ import android.content.Context
 import android.os.CountDownTimer
 import android.os.Handler
 import android.os.Looper
+import android.view.View
 import androidx.lifecycle.Observer
 import androidx.work.WorkInfo
 import com.google.android.gms.ads.AdSize
 import com.google.android.gms.ads.AdapterResponseInfo
 import com.google.android.gms.ads.admanager.AdManagerAdRequest
+import com.google.gson.Gson
 import com.rtb.rtbdemand.common.AdRequest
 import com.rtb.rtbdemand.common.AdTypes
+import com.rtb.rtbdemand.common.connectionAvailable
 import com.rtb.rtbdemand.sdk.BannerManagerListener
 import com.rtb.rtbdemand.sdk.ConfigSetWorker
 import com.rtb.rtbdemand.sdk.RTBDemand
 import com.rtb.rtbdemand.sdk.SDKConfig
+import com.rtb.rtbdemand.sdk.log
 import org.prebid.mobile.BannerAdUnit
 import java.util.Date
 import kotlin.math.ceil
 
-internal class BannerManager(private val context: Context, private val bannerListener: BannerManagerListener) {
+internal class BannerManager(private val context: Context, private val bannerListener: BannerManagerListener, private val view: View? = null) {
 
     private var activeTimeCounter: CountDownTimer? = null
     private var passiveTimeCounter: CountDownTimer? = null
@@ -31,7 +35,7 @@ internal class BannerManager(private val context: Context, private val bannerLis
     private val storeService = RTBDemand.getStoreService(context)
     private var isForegroundRefresh = 1
     private var overridingUnit: String? = null
-
+    private var refreshBlocked = false
 
     init {
         sdkConfig = storeService.config
@@ -99,18 +103,19 @@ internal class BannerManager(private val context: Context, private val bannerLis
     }
 
     fun setConfig(pubAdUnit: String, adSizes: ArrayList<AdSize>, adType: String) {
+        view.log { String.format("%s:%s", "setConfig", "entry") }
         if (!shouldBeActive()) return
         if (sdkConfig?.getBlockList()?.any { pubAdUnit.contains(it) } == true) {
             shouldBeActive = false
             return
         }
-        val validConfig = sdkConfig?.refreshConfig?.firstOrNull { config -> config.specific?.equals(pubAdUnit, true) == true || config.type == adType || config.type == "all" }
+        val validConfig = sdkConfig?.refreshConfig?.firstOrNull { config -> config.specific?.equals(pubAdUnit, true) == true || config.type == adType || config.type.equals("all", true) }
         if (validConfig == null) {
             shouldBeActive = false
             return
         }
         bannerConfig.apply {
-            customUnitName = String.format("/%s/%s-%s", getNetworkName(), sdkConfig?.affiliatedId.toString(), validConfig.nameType ?: "")
+            customUnitName = String.format("/%s/%s-%s", getNetworkName(), sdkConfig?.affiliatedId.toString(), getUnitNameType(validConfig.nameType ?: "", sdkConfig?.supportedSizes, adSizes))
             isNewUnit = pubAdUnit.contains(sdkConfig?.networkId ?: "")
             publisherAdUnit = pubAdUnit
             position = validConfig.position ?: 0
@@ -130,6 +135,28 @@ internal class BannerManager(private val context: Context, private val bannerLis
             } else {
                 adSizes
             }
+        }
+        view.log { String.format("%s:%s", "setConfig", Gson().toJson(bannerConfig)) }
+    }
+
+    private fun getUnitNameType(type: String, supportedSizes: List<SDKConfig.Size>?, pubSizes: List<AdSize>): String {
+        if (supportedSizes.isNullOrEmpty()) return type
+        else {
+            val matchedSizes = arrayListOf<SDKConfig.Size>()
+            pubSizes.forEach { pubsize ->
+                supportedSizes.firstOrNull { (it.width?.toIntOrNull() ?: 0) == pubsize.width && (it.height?.toIntOrNull() ?: 0) == pubsize.height }?.let { matchedSize ->
+                    matchedSizes.add(matchedSize)
+                }
+            }
+            var biggestSize: SDKConfig.Size? = null
+            var maxArea = 0
+            matchedSizes.forEach {
+                if (maxArea < ((it.width?.toIntOrNull() ?: 0) * (it.height?.toIntOrNull() ?: 0))) {
+                    biggestSize = it
+                    maxArea = (it.width?.toIntOrNull() ?: 0) * (it.height?.toIntOrNull() ?: 0)
+                }
+            }
+            return biggestSize?.let { String.format("%s-%s", it.width, it.height) } ?: type
         }
     }
 
@@ -173,11 +200,26 @@ internal class BannerManager(private val context: Context, private val bannerLis
         bannerConfig.isVisible = visible
     }
 
-    fun adFailedToLoad(isPublisherLoad: Boolean) {
+    fun adReported(creativeId: String?, reportReasons: List<String>) {
+        if (sdkConfig?.geoEdge?.creativeIds?.replace(" ", "")?.split(",")?.contains(creativeId) == true) {
+            refreshBlocked = true
+        }
+        val configReasons = sdkConfig?.geoEdge?.reasons?.replace(" ", "")?.split(",")
+        configReasons?.forEach { reason ->
+            if (reportReasons.any { reason.contains(it) }) {
+                refreshBlocked = true
+            }
+        }
+    }
+
+    fun adFailedToLoad(isPublisherLoad: Boolean): Boolean {
+        view.log { "AdFailed & Unfilled Config: ${Gson().toJson(bannerConfig.unFilled)}" }
+        view.log { "AdFailed & Retry Config: ${Gson().toJson(bannerConfig.retryConfig)}" }
         if (bannerConfig.unFilled?.status == 1) {
-            startUnfilledRefreshCounter(sdkConfig?.passiveRefreshInterval?.toLong() ?: 0L)
+            startUnfilledRefreshCounter()
             if (isPublisherLoad) {
                 refresh(unfilled = true)
+                return true
             } else {
                 if ((bannerConfig.retryConfig?.retries ?: 0) > 0) {
                     bannerConfig.retryConfig?.retries = (bannerConfig.retryConfig?.retries ?: 0) - 1
@@ -190,17 +232,22 @@ internal class BannerManager(private val context: Context, private val bannerLis
                             overridingUnit = null
                         }
                     }, (bannerConfig.retryConfig?.retryInterval ?: 0).toLong() * 1000)
+                    return true
                 } else {
                     overridingUnit = null
+                    return false
                 }
             }
+        } else {
+            return false
         }
     }
 
     fun adLoaded(firstLook: Boolean, loadedAdapter: AdapterResponseInfo?) {
-        if (sdkConfig?.switch == 1) {
+        adImpressed()
+        if (sdkConfig?.switch == 1 && !refreshBlocked) {
             overridingUnit = null
-            bannerConfig.retryConfig = sdkConfig?.retryConfig
+            bannerConfig.retryConfig = sdkConfig?.retryConfig.also { it?.fillAdUnits() }
             unfilledRefreshCounter?.cancel()
             val blockedTerms = sdkConfig?.networkBlock?.replace(" ", "")?.split(",") ?: listOf()
             var isNetworkBlocked = false
@@ -219,7 +266,13 @@ internal class BannerManager(private val context: Context, private val bannerLis
         }
     }
 
+    fun adImpressed() {
+        val currentTimeStamp = Date().time
+        bannerConfig.lastRefreshAt = currentTimeStamp
+    }
+
     private fun startRefreshing(resetVisibleTime: Boolean = false, isPublisherLoad: Boolean = false, timers: Int? = null) {
+        view.log { "startRefreshing: $resetVisibleTime $isPublisherLoad $timers" }
         if (resetVisibleTime) {
             bannerConfig.isVisibleFor = 0
         }
@@ -270,7 +323,10 @@ internal class BannerManager(private val context: Context, private val bannerLis
         passiveTimeCounter?.start()
     }
 
-    private fun startUnfilledRefreshCounter(seconds: Long) {
+    private fun startUnfilledRefreshCounter() {
+        val passiveTime = sdkConfig?.passiveRefreshInterval?.toLong() ?: 0L
+        val difference = sdkConfig?.difference?.toLong() ?: 0L
+        val seconds = if (passiveTime <= difference) difference else passiveTime
         unfilledRefreshCounter?.cancel()
         if (seconds <= 0) return
         unfilledRefreshCounter = object : CountDownTimer(seconds * 1000, 1000) {
@@ -287,39 +343,88 @@ internal class BannerManager(private val context: Context, private val bannerLis
 
     fun refresh(active: Int = 1, unfilled: Boolean = false) {
         val currentTimeStamp = Date().time
-        val differenceOfLastRefresh = ceil((currentTimeStamp - bannerConfig.lastRefreshAt).toDouble() / 1000.00).toInt()
-        val timers = if (active == 0 && unfilled) {
-            null
-        } else {
-            active
-        }
-
         fun refreshAd() {
             bannerConfig.lastRefreshAt = currentTimeStamp
             bannerListener.attachAdView(getAdUnitName(unfilled, false), bannerConfig.adSizes)
             loadAd(active, unfilled)
         }
-        if (isForegroundRefresh == 0 && bannerConfig.factor < 0) {
-            startRefreshing(timers = timers)
+
+        val differenceOfLastRefresh = ceil((currentTimeStamp - bannerConfig.lastRefreshAt).toDouble() / 1000.00).toInt()
+        if (unfilled) {
+            view.log { "Retrying" }
+        }
+        val timers = if (active == 0 && unfilled) {
+            null
         } else {
-            if (unfilled || ((bannerConfig.isVisible || (differenceOfLastRefresh >= (if (active == 1) bannerConfig.activeRefreshInterval else bannerConfig.passiveRefreshInterval) * bannerConfig.factor))
-                            && differenceOfLastRefresh >= bannerConfig.difference && (bannerConfig.isVisibleFor >= (if (wasFirstLook || bannerConfig.isNewUnit) bannerConfig.minView else bannerConfig.minViewRtb)))
-            ) {
-                refreshAd()
+            active
+        }
+        var takeOpportunity = false
+        if (active == 1) {
+            var pickOpportunity = false
+            if (bannerConfig.isVisible) {
+                pickOpportunity = true
             } else {
-                startRefreshing(timers = timers)
+                if ((sdkConfig?.visibleFactor ?: 0) < 0) {
+                    pickOpportunity = false
+                } else {
+                    if (ceil((currentTimeStamp - bannerConfig.lastActiveOpportunity).toDouble() / 1000.00).toInt() >= (sdkConfig?.visibleFactor ?: 0) * bannerConfig.activeRefreshInterval) {
+                        pickOpportunity = true
+                    }
+                }
             }
+            if (pickOpportunity) {
+                bannerConfig.lastActiveOpportunity = currentTimeStamp
+                if (differenceOfLastRefresh >= bannerConfig.difference && (bannerConfig.isVisibleFor >= (if (wasFirstLook || bannerConfig.isNewUnit) bannerConfig.minView else bannerConfig.minViewRtb))) {
+                    takeOpportunity = true
+                }
+            }
+        } else if (active == 0) {
+            var pickOpportunity = false
+            if (isForegroundRefresh == 1) {
+                if (bannerConfig.isVisible) {
+                    pickOpportunity = true
+                } else {
+                    if (bannerConfig.factor < 0) {
+                        pickOpportunity = false
+                    } else {
+                        if (ceil((currentTimeStamp - bannerConfig.lastPassiveOpportunity).toDouble() / 1000.00).toInt() >= bannerConfig.factor * bannerConfig.passiveRefreshInterval) {
+                            pickOpportunity = true
+                        }
+                    }
+                }
+            } else {
+                if (bannerConfig.factor < 0) {
+                    pickOpportunity = false
+                } else {
+                    if (ceil((currentTimeStamp - bannerConfig.lastPassiveOpportunity).toDouble() / 1000.00).toInt() >= bannerConfig.factor * bannerConfig.passiveRefreshInterval) {
+                        pickOpportunity = true
+                    }
+                }
+            }
+            if (pickOpportunity) {
+                bannerConfig.lastPassiveOpportunity = currentTimeStamp
+                if (differenceOfLastRefresh >= bannerConfig.difference && (bannerConfig.isVisibleFor >= (if (wasFirstLook || bannerConfig.isNewUnit) bannerConfig.minView else bannerConfig.minViewRtb))) {
+                    takeOpportunity = true
+                }
+            }
+        }
+
+        if (unfilled || (isForegroundRefresh == 1 && takeOpportunity && context.connectionAvailable() == true)) {
+            refreshAd()
+        } else {
+            startRefreshing(timers = timers)
         }
     }
 
-    private fun createRequest(active: Int, unfilled: Boolean = false) = AdRequest().Builder().apply {
+    private fun createRequest(active: Int, unfilled: Boolean = false, hijacked: Boolean = false) = AdRequest().Builder().apply {
         addCustomTargeting("adunit", bannerConfig.publisherAdUnit)
         addCustomTargeting("active", active.toString())
         addCustomTargeting("refresh", bannerConfig.refreshCount.toString())
         addCustomTargeting("hb_format", "amp")
         addCustomTargeting("visible", isForegroundRefresh.toString())
         addCustomTargeting("min_view", (if (bannerConfig.isVisibleFor > 10) 10 else bannerConfig.isVisibleFor).toString())
-        addCustomTargeting("retry", (if (unfilled) 1 else 0).toString())
+        if (unfilled) addCustomTargeting("retry", "1")
+        if (hijacked) addCustomTargeting("hijack", "1")
     }.build()
 
     private fun loadAd(active: Int, unfilled: Boolean) {
@@ -334,10 +439,12 @@ internal class BannerManager(private val context: Context, private val bannerLis
     fun checkOverride(): AdManagerAdRequest? {
         if (bannerConfig.isNewUnit && bannerConfig.newUnit?.status == 1) {
             bannerListener.attachAdView(getAdUnitName(unfilled = false, hijacked = false, newUnit = true), bannerConfig.adSizes)
+            view.log { "checkOverride: new Unit" }
             return createRequest(1).getAdRequest()
         } else if (bannerConfig.hijack?.status == 1) {
             bannerListener.attachAdView(getAdUnitName(unfilled = false, hijacked = true, newUnit = false), bannerConfig.adSizes)
-            return createRequest(1).getAdRequest()
+            view.log { "checkOverride: hijack" }
+            return createRequest(1, hijacked = true).getAdRequest()
         }
         return null
     }
@@ -352,6 +459,7 @@ internal class BannerManager(private val context: Context, private val bannerLis
 
     fun fetchDemand(firstLook: Boolean, adRequest: AdManagerAdRequest, callback: () -> Unit) {
         if ((firstLook && sdkConfig?.prebid?.firstLook == 1) || ((bannerConfig.isNewUnit || !firstLook) && sdkConfig?.prebid?.other == 1)) {
+            view.log { "Fetch Demand with firstlook:  $firstLook and placement:  ${Gson().toJson(bannerConfig.placement)}" }
             bannerConfig.placement?.let {
                 if (bannerConfig.adSizes.isNotEmpty()) {
                     val totalSizes = (bannerConfig.adSizes as ArrayList<AdSize>)
@@ -361,7 +469,9 @@ internal class BannerManager(private val context: Context, private val bannerLis
                     adUnit.fetchDemand(adRequest) { callback() }
                 }
             } ?: callback()
+
         } else {
+            view.log { "Fetch Demand : without Prebid" }
             callback()
         }
     }
@@ -387,5 +497,9 @@ internal class BannerManager(private val context: Context, private val bannerLis
         activeTimeCounter?.cancel()
         passiveTimeCounter?.cancel()
         unfilledRefreshCounter?.cancel()
+    }
+
+    fun allowCallback(refreshLoad: Boolean): Boolean {
+        return !refreshLoad || sdkConfig?.infoConfig?.refreshCallbacks == 1
     }
 }

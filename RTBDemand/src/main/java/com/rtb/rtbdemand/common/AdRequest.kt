@@ -16,6 +16,8 @@ class AdRequest {
         }
     }
 
+    fun getBuilder() = Builder()
+
     @SuppressLint("VisibleForTests")
     inner class Builder {
         private val requestBuilder: AdManagerAdRequest.Builder = AdManagerAdRequest.Builder()
@@ -44,7 +46,7 @@ class AdRequest {
         }
 
         fun build(): AdRequest {
-            adRequest = requestBuilder.build()
+            adRequest = requestBuilder.addCustomTargeting("ABM_Load", "Yes").build()
             return this@AdRequest
         }
 
