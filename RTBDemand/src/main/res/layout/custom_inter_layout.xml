@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/white"
+    android:elevation="10dp"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:id="@+id/root_layout"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_centerInParent="true"
+        android:gravity="center"
+        android:orientation="vertical" />
+
+    <ImageButton
+        android:id="@+id/close_ad"
+        android:layout_width="36dp"
+        android:layout_height="38dp"
+        android:layout_alignParentEnd="true"
+        android:layout_margin="10dp"
+        android:visibility="gone"
+        android:contentDescription="Close Ad"
+        android:elevation="5dp"
+        android:src="@drawable/baseline_close_24"
+        tools:ignore="HardcodedText" />
+
+</RelativeLayout>

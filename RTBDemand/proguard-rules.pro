@@ -27,3 +27,8 @@
 -keep class p.haeg.w.** {*;}
 -keep interface p.haeg.w.** {*;}
 -keepclassmembers class cp.haeg.w.** { public *; }
+-keep class com.amazon.** { *; }
+-keep public class com.google.android.gms.ads.** {
+    public *;
+}
+-dontwarn java.lang.invoke.StringConcatFactory

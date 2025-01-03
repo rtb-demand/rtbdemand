@@ -1,4 +1,4 @@
-package com.rtb.andbeyondmedia
+package com.rtb.andbeyondtest
 
 import android.app.Activity
 import android.app.Application
@@ -10,6 +10,7 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import com.rtb.rtbdemand.appopen.AppOpenAdManager
 import com.rtb.rtbdemand.sdk.FullScreenContentCallback
 import com.rtb.rtbdemand.sdk.RTBDemand
+import com.rtb.rtbdemand.sdk.RTBError
 
 class ThisApplication : Application() {
 
@@ -41,7 +42,7 @@ class ThisApplication : Application() {
         override fun onAdDismissedFullScreenContent() {
         }
 
-        override fun onAdFailedToShowFullScreenContent(error: String) {
+        override fun onAdFailedToShowFullScreenContent(error: RTBError) {
         }
 
         override fun onAdImpression() {

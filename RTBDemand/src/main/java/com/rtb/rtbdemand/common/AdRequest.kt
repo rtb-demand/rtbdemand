@@ -45,6 +45,31 @@ class AdRequest {
             return this
         }
 
+        fun setContentUrl(contentUrl: String): AdRequest.Builder {
+            requestBuilder.setContentUrl(contentUrl)
+            return this
+        }
+
+        fun setRequestAgent(requestAgent: String): AdRequest.Builder {
+            requestBuilder.setRequestAgent(requestAgent)
+            return this
+        }
+
+        fun addKeyword(keyword: String): AdRequest.Builder {
+            requestBuilder.addKeyword(keyword)
+            return this
+        }
+
+        fun setAdString(adString: String): AdRequest.Builder {
+            requestBuilder.setAdString(adString)
+            return this
+        }
+
+        fun setNeighboringContentUrls(neighboringContentUrls: List<String>): AdRequest.Builder {
+            requestBuilder.setNeighboringContentUrls(neighboringContentUrls)
+            return this
+        }
+
         fun build(): AdRequest {
             adRequest = requestBuilder.addCustomTargeting("ABM_Load", "Yes").build()
             return this@AdRequest

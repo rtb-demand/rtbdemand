@@ -22,4 +22,7 @@ internal data class AppOpenConfig(
         var hijack: SDKConfig.LoadConfig? = null,
         @SerializedName("unFilled")
         var unFilled: SDKConfig.LoadConfig? = null,
-)
+) {
+    @Keep
+    fun isNewUnitApplied() = isNewUnit && newUnit?.status == 1
+}

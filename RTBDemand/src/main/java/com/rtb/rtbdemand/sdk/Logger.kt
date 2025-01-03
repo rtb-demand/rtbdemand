@@ -17,12 +17,25 @@ internal fun Logger.log(tag: String = TAG, msg: String) {
     }
 }
 
+internal fun log(msg: String) {
+    Log.i("ABM", msg)
+}
+
 internal fun log(getMessage: () -> String) {
     if (!RTBDemand.specialTag.isNullOrEmpty()) {
         try {
-            Log.i(RTBDemand.specialTag, getMessage())
-        } catch (e: Throwable) {
-            e.printStackTrace()
+            Log.i(RTBDemand.specialTag ?: "", getMessage())
+        } catch (_: Throwable) {
+
+        }
+    }
+}
+
+internal fun String?.log(getMessage: () -> String) {
+    if (!RTBDemand.specialTag.isNullOrEmpty()) {
+        try {
+            Log.i(RTBDemand.specialTag, String.format("%s~ %s", this, getMessage()))
+        } catch (_: Throwable) {
         }
     }
 }
@@ -31,8 +44,7 @@ internal fun View?.log(getMessage: () -> String) {
     if (!RTBDemand.specialTag.isNullOrEmpty()) {
         try {
             Log.i(RTBDemand.specialTag, String.format("%d-%s", this?.id ?: -1, getMessage()))
-        } catch (e: Throwable) {
-            e.printStackTrace()
+        } catch (_: Throwable) {
         }
     }
 }

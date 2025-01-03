@@ -1,9 +1,9 @@
-package com.rtb.andbeyondmedia
+package com.rtb.andbeyondtest
 
 import android.os.Bundle
 import android.util.DisplayMetrics
 import androidx.appcompat.app.AppCompatActivity
-import com.rtb.andbeyondmedia.databinding.ActivityMainBinding
+import com.rtb.andbeyondtest.databinding.ActivityMainBinding
 import com.rtb.rtbdemand.banners.BannerAdSize
 import com.rtb.rtbdemand.banners.BannerAdView
 import com.rtb.rtbdemand.common.AdRequest

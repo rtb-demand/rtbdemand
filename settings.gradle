@@ -14,6 +14,15 @@ dependencyResolutionManagement {
             url 'https://jitpack.io'
             credentials { username "jp_7n01f54jh15tek9vb60gmnb9rp" }
         }
+        maven {
+            url 'https://repo.pubmatic.com/artifactory/public-repos'
+        }
+        maven {
+            url "https://dl-maven-android.mintegral.com/repository/mbridge_android_sdk_oversea"
+        }
+        maven {
+            url 'https://artifact.bytedance.com/repository/pangle/'
+        }
     }
 }
 rootProject.name = "RTBDemand"

@@ -24,12 +24,12 @@ class RtbAdapter : Adapter() {
 
         @SuppressLint("VisibleForTests")
         fun createAdRequest(mediationAdConfiguration: MediationAdConfiguration): AdManagerAdRequest {
-            return AdManagerAdRequest.Builder().addCustomTargeting("hb_format", "amp").build()
+            return AdManagerAdRequest.Builder().addCustomTargeting("hb_format", "amp").addCustomTargeting("ABM_Load", "Yes").build()
         }
     }
 
     override fun initialize(context: Context, initializationCompleteCallback: InitializationCompleteCallback, list: List<MediationConfiguration>) {
-        Logger.INFO.log(TAG, "initialize: $TAG")
+        Logger.INFO.log(TAG, "initialize: AndBeyondAdapter")
         return
     }
 

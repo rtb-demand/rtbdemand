@@ -1,10 +1,14 @@
 package com.rtb.rtbdemand.sdk
 
 import com.google.android.gms.ads.AdSize
+import com.rtb.rtbdemand.banners.BannerAdView
 import com.rtb.rtbdemand.common.AdRequest
+import com.rtb.rtbdemand.intersitial.InterstitialAd
 
 internal interface BannerManagerListener {
-    fun attachAdView(adUnitId: String, adSizes: List<AdSize>)
+    fun attachAdView(adUnitId: String, adSizes: List<AdSize>, attach: Boolean)
+
+    fun attachFallback(fallbackBanner: Fallback.Banner)
 
     fun loadAd(request: AdRequest): Boolean
 }
@@ -12,18 +16,18 @@ internal interface BannerManagerListener {
 interface FullScreenContentCallback {
     fun onAdClicked()
     fun onAdDismissedFullScreenContent()
-    fun onAdFailedToShowFullScreenContent(error: String)
+    fun onAdFailedToShowFullScreenContent(error: RTBError)
     fun onAdImpression()
     fun onAdShowedFullScreenContent()
 }
 
 interface BannerAdListener {
-    fun onAdClicked()
-    fun onAdClosed()
-    fun onAdFailedToLoad(error: String, retrying: Boolean)
-    fun onAdImpression()
-    fun onAdLoaded()
-    fun onAdOpened()
+    fun onAdClicked(bannerAdView: BannerAdView)
+    fun onAdClosed(bannerAdView: BannerAdView)
+    fun onAdFailedToLoad(bannerAdView: BannerAdView, error: RTBError, retrying: Boolean)
+    fun onAdImpression(bannerAdView: BannerAdView)
+    fun onAdLoaded(bannerAdView: BannerAdView)
+    fun onAdOpened(bannerAdView: BannerAdView)
 }
 
 fun interface OnShowAdCompleteListener {
@@ -32,5 +36,25 @@ fun interface OnShowAdCompleteListener {
 
 interface AdLoadCallback {
     fun onAdLoaded()
-    fun onAdFailedToLoad(error: String)
+    fun onAdFailedToLoad(error: RTBError)
 }
+
+interface InterstitialAdListener {
+
+    fun onAdReceived(var1: InterstitialAd)
+
+    fun onAdFailedToLoad(var1: InterstitialAd, var2: RTBError)
+
+    fun onAdFailedToShow(var1: InterstitialAd, var2: RTBError)
+
+    fun onAppLeaving(var1: InterstitialAd)
+
+    fun onAdOpened(var1: InterstitialAd)
+
+    fun onAdClosed(var1: InterstitialAd)
+
+    fun onAdClicked(var1: InterstitialAd)
+
+    fun onAdExpired(var1: InterstitialAd)
+}
+

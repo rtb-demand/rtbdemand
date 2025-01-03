@@ -4,12 +4,12 @@ plugins {
 }
 
 android {
-    compileSdk 32
+    compileSdk 34
 
     defaultConfig {
-        applicationId "com.rtb.andbeyondmedia"
-        minSdk 21
-        targetSdk 32
+        applicationId "com.rtb.andbeyondtest"
+        minSdk 24
+        targetSdk 34
         versionCode 1
         versionName "1.0"
 
@@ -23,27 +23,31 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
     kotlinOptions {
-        jvmTarget = '1.8'
+        jvmTarget = '17'
     }
     buildFeatures {
         viewBinding true
     }
-    namespace 'com.rtb.andbeyondmedia'
+    namespace 'com.rtb.andbeyondtest'
 }
 ext {
-    lifecycle_version = '2.5.1'
+    lifecycle_version = '2.8.3'
 }
 
 dependencies {
 
-    implementation 'androidx.appcompat:appcompat:1.5.1'
+    implementation "androidx.appcompat:appcompat:1.5.1"
+    implementation 'com.google.android.material:material:1.12.0'
+    implementation "com.google.android.gms:play-services-ads:23.2.0"
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
     implementation 'androidx.lifecycle:lifecycle-extensions:2.2.0'
     implementation "androidx.lifecycle:lifecycle-runtime-ktx:$lifecycle_version"
     implementation "androidx.lifecycle:lifecycle-common-java8:$lifecycle_version"
+
+    implementation 'com.github.anrwatchdog:anrwatchdog:1.4.0'
     implementation project(':RTBDemand')
 }

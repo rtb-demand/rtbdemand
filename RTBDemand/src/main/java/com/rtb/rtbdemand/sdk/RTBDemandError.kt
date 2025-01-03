@@ -1,8 +1,11 @@
 package com.rtb.rtbdemand.sdk
 
+import androidx.annotation.Keep
 import com.google.android.gms.ads.AdError
 
 /** Convenience factory class to create AdError objects for custom events.  */
+
+@Keep
 object RTBDemandError {
     const val SAMPLE_SDK_DOMAIN = "com.google.android.gms.ads"
     const val CUSTOM_EVENT_ERROR_DOMAIN = "com.rtb.rtbdemand.adapter"
@@ -28,10 +31,9 @@ object RTBDemandError {
 
     fun createCustomEventNoActivityContextError(): AdError {
         return AdError(
-            ERROR_NO_ACTIVITY_CONTEXT,
-            "An activity context is required to show the sample ad",
-            CUSTOM_EVENT_ERROR_DOMAIN
-        )
+                ERROR_NO_ACTIVITY_CONTEXT,
+                "An activity context is required to show the sample ad",
+                CUSTOM_EVENT_ERROR_DOMAIN)
     }
 
     /**

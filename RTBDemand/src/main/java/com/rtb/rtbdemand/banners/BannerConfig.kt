@@ -3,11 +3,14 @@ package com.rtb.rtbdemand.banners
 import androidx.annotation.Keep
 import com.google.android.gms.ads.AdSize
 import com.google.gson.annotations.SerializedName
+import com.rtb.rtbdemand.sdk.Fallback
 import com.rtb.rtbdemand.sdk.SDKConfig
 import java.util.Date
 
 @Keep
 internal data class BannerConfig(
+        @SerializedName("instant_refresh")
+        var instantRefresh: Int? = null,
         @SerializedName("customUnitName")
         var customUnitName: String = "",
         @SerializedName("isNewUnit")
@@ -15,7 +18,7 @@ internal data class BannerConfig(
         @SerializedName("publisherAdUnit")
         var publisherAdUnit: String = "",
         @SerializedName("adSizes")
-        var adSizes: List<AdSize> = arrayListOf(),
+        var adSizes: ArrayList<AdSize> = arrayListOf(),
         @SerializedName("position")
         var position: Int = 0,
         @SerializedName("retryConfig")
@@ -35,7 +38,9 @@ internal data class BannerConfig(
         @SerializedName("passiveRefreshInterval")
         var passiveRefreshInterval: Int = 0,
         @SerializedName("factor")
-        var factor: Int = 0,
+        var factor: Int = 1,
+        @SerializedName("active_factor")
+        var visibleFactor: Int = 1,
         @SerializedName("minView")
         var minView: Int = 0,
         @SerializedName("minViewRtb")
@@ -43,11 +48,22 @@ internal data class BannerConfig(
         @SerializedName("refreshCount")
         var refreshCount: Int = 0,
         @SerializedName("isVisible")
-        var isVisible: Boolean = false,
+        var isVisible: Boolean? = null,
         @SerializedName("isVisibleFor")
         var isVisibleFor: Long = 0,
         @SerializedName("lastRefreshAt")
         var lastRefreshAt: Long = Date().time,
         var lastActiveOpportunity: Long = Date().time,
-        var lastPassiveOpportunity: Long = Date().time
-)
+        var lastPassiveOpportunity: Long = Date().time,
+        @SerializedName("format")
+        var format: String? = null,
+        @SerializedName("fallback")
+        var fallback: Fallback? = null,
+        @SerializedName("geoedge")
+        var geoEdge: SDKConfig.GeoEdge? = null,
+        @SerializedName("native_fallback")
+        var nativeFallback: Int? = null
+) {
+    @Keep
+    fun isNewUnitApplied() = isNewUnit && newUnit?.status == 1
+}

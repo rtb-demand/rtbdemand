@@ -8,6 +8,7 @@ import com.rtb.rtbdemand.common.ServerSideVerificationOptions
 import com.rtb.rtbdemand.rewardedinterstitial.Reward
 import com.rtb.rtbdemand.sdk.FullScreenContentCallback
 import com.rtb.rtbdemand.sdk.Logger
+import com.rtb.rtbdemand.sdk.RTBError
 import com.rtb.rtbdemand.sdk.log
 
 class RewardedAd(private val context: Activity, private val adUnit: String) {
@@ -52,7 +53,7 @@ class RewardedAd(private val context: Activity, private val adUnit: String) {
             override fun onAdFailedToShowFullScreenContent(p0: AdError) {
                 super.onAdFailedToShowFullScreenContent(p0)
                 mRewardedAd = null
-                callback.onAdFailedToShowFullScreenContent(p0.toString())
+                callback.onAdFailedToShowFullScreenContent(RTBError(p0.code, p0.message))
             }
 
             override fun onAdImpression() {
