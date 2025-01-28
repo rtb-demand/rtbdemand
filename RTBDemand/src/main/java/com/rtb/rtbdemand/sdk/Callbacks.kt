@@ -1,6 +1,7 @@
 package com.rtb.rtbdemand.sdk
 
 import com.google.android.gms.ads.AdSize
+import com.rtb.rtbdemand.admob.AdMobBannerAdView
 import com.rtb.rtbdemand.banners.BannerAdView
 import com.rtb.rtbdemand.common.AdRequest
 import com.rtb.rtbdemand.intersitial.InterstitialAd
@@ -28,6 +29,15 @@ interface BannerAdListener {
     fun onAdImpression(bannerAdView: BannerAdView)
     fun onAdLoaded(bannerAdView: BannerAdView)
     fun onAdOpened(bannerAdView: BannerAdView)
+}
+
+interface AdMobBannerListener {
+    fun onAdClicked(bannerAdView: AdMobBannerAdView)
+    fun onAdClosed(bannerAdView: AdMobBannerAdView)
+    fun onAdFailedToLoad(bannerAdView: AdMobBannerAdView, error: RTBError, retrying: Boolean)
+    fun onAdImpression(bannerAdView: AdMobBannerAdView)
+    fun onAdLoaded(bannerAdView: AdMobBannerAdView)
+    fun onAdOpened(bannerAdView: AdMobBannerAdView)
 }
 
 fun interface OnShowAdCompleteListener {

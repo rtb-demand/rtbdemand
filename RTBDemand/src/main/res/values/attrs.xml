@@ -1,10 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Define the adSize attribute once -->
+    <attr name="adSize" format="string" />
+    <attr name="adSizes" format="string" />
+    <attr name="adUnitId" format="string" />
+    <attr name="adType" format="string" />
+    <attr name="section" format="string" />
+
     <declare-styleable name="BannerAdView">
-        <attr name="adSize" format="string" />
-        <attr name="adSizes" format="string" />
-        <attr name="adUnitId" format="string" />
-        <attr name="adType" format="string" />
-        <attr name="section" format="string" />
+        <attr name="adSize" /> <!-- Reference the globally defined adSize -->
+        <attr name="adSizes" />
+        <attr name="adUnitId" />
+        <attr name="adType" />
+        <attr name="section" />
+    </declare-styleable>
+
+    <declare-styleable name="AdMobBannerAdView">
+        <attr name="adSize" /> <!-- Reference the globally defined adSize -->
+        <attr name="adUnitId" />
+        <attr name="adType" />
+        <attr name="section" />
     </declare-styleable>
 </resources>
