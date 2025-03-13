@@ -1,8 +1,6 @@
 package com.rtb.rtbdemand.unified
 
 import android.content.Context
-import androidx.lifecycle.Observer
-import androidx.work.WorkInfo
 import com.google.android.gms.ads.AdListener
 import com.google.android.gms.ads.AdLoader
 import com.google.android.gms.ads.AdSize
@@ -19,7 +17,7 @@ import com.rtb.rtbdemand.common.AdRequest
 import com.rtb.rtbdemand.common.AdTypes
 import com.rtb.rtbdemand.intersitial.InterstitialConfig
 import com.rtb.rtbdemand.sdk.BannerAdListener
-import com.rtb.rtbdemand.sdk.ConfigFetchWorker
+import com.rtb.rtbdemand.sdk.ConfigFetch
 import com.rtb.rtbdemand.sdk.ConfigProvider
 import com.rtb.rtbdemand.sdk.CountryModel
 import com.rtb.rtbdemand.sdk.RTBDemand
@@ -280,25 +278,11 @@ class UnifiedAdManager(private val context: Context, private val adUnit: String)
 
     @Suppress("UNNECESSARY_SAFE_CALL")
     private fun shouldSetConfig(callback: (Boolean) -> Unit) = CoroutineScope(Dispatchers.Main).launch {
-        val workManager = RTBDemand.getWorkManager(context)
-        val workers = workManager.getWorkInfosForUniqueWork(ConfigFetchWorker::class.java.simpleName).get()
-        if (workers.isNullOrEmpty()) {
-            callback(false)
-        } else {
-            try {
-                val workerData = workManager.getWorkInfoByIdLiveData(workers[0].id)
-                workerData?.observeForever(object : Observer<WorkInfo?> {
-                    override fun onChanged(value: WorkInfo?) {
-                        if (value?.state != WorkInfo.State.RUNNING && value?.state != WorkInfo.State.ENQUEUED) {
-                            workerData.removeObserver(this)
-                            sdkConfig = ConfigProvider.getConfig(context)
-                            shouldBeActive = !(sdkConfig == null || sdkConfig?.switch != 1)
-                            callback(shouldBeActive)
-                        }
-                    }
-                })
-            } catch (e: Throwable) {
-                callback(false)
+        ConfigProvider.configStatus.collect {
+            if (it is ConfigFetch.Completed) {
+                sdkConfig = it.config
+                shouldBeActive = !(sdkConfig == null || sdkConfig?.switch != 1)
+                callback(shouldBeActive)
             }
         }
     }

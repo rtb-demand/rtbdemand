@@ -37,7 +37,7 @@ import com.rtb.rtbdemand.common.getHardwareDeviceId
 import com.rtb.rtbdemand.common.getLocation
 import com.rtb.rtbdemand.common.getUniqueId
 import com.rtb.rtbdemand.sdk.BannerManagerListener
-import com.rtb.rtbdemand.sdk.ConfigFetchWorker
+import com.rtb.rtbdemand.sdk.ConfigFetch
 import com.rtb.rtbdemand.sdk.ConfigProvider
 import com.rtb.rtbdemand.sdk.CountryDetectionWorker
 import com.rtb.rtbdemand.sdk.CountryModel
@@ -161,34 +161,20 @@ internal class AdMobBannerManager(private val context: Context, private val bann
     @Suppress("UNNECESSARY_SAFE_CALL")
     fun shouldSetConfig(callback: (Boolean) -> Unit) = CoroutineScope(Dispatchers.Main).launch {
         var actualCallback: ((Boolean) -> Unit)? = callback
-        val workManager = RTBDemand.getWorkManager(context)
-        val workers = workManager.getWorkInfosForUniqueWork(ConfigFetchWorker::class.java.simpleName).get()
-        if (workers.isNullOrEmpty()) {
-            actualCallback?.invoke(false)
-            actualCallback = null
-        } else {
-            try {
-                val workerData = workManager.getWorkInfoByIdLiveData(workers[0].id)
-                workerData?.observeForever(object : Observer<WorkInfo?> {
-                    override fun onChanged(value: WorkInfo?) {
-                        if (value?.state != WorkInfo.State.RUNNING && value?.state != WorkInfo.State.ENQUEUED) {
-                            workerData.removeObserver(this)
-                            sdkConfig = ConfigProvider.getConfig(context)
-                            shouldBeActive = !(sdkConfig == null || sdkConfig?.switch != 1)
-                            actualCallback?.invoke(shouldBeActive)
-                            actualCallback = null
-                        }
-                    }
-                })
-            } catch (_: Throwable) {
-                actualCallback?.invoke(false)
-                actualCallback = null
-            }
-        }
+
         Handler(Looper.getMainLooper()).postDelayed({
             actualCallback?.invoke(false)
             actualCallback = null
-        }, 4000)
+        }, 3000)
+
+        ConfigProvider.configStatus.collect {
+            if (it is ConfigFetch.Completed && actualCallback != null) {
+                sdkConfig = it.config
+                shouldBeActive = !(sdkConfig == null || sdkConfig?.switch != 1)
+                actualCallback?.invoke(shouldBeActive)
+                actualCallback = null
+            }
+        }
     }
 
     fun setSudoConfig(sdkConfig: SDKConfig?) {

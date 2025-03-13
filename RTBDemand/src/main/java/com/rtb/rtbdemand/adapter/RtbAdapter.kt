@@ -29,7 +29,7 @@ class RtbAdapter : Adapter() {
     }
 
     override fun initialize(context: Context, initializationCompleteCallback: InitializationCompleteCallback, list: List<MediationConfiguration>) {
-        Logger.INFO.log(TAG, "initialize: AndBeyondAdapter")
+        Logger.INFO.log(TAG, "initialize: $TAG")
         return
     }
 

@@ -15,6 +15,7 @@ import com.rtb.rtbdemand.sdk.RTBDemand.checkForSilentInterstitial
 import com.rtb.rtbdemand.sdk.RTBDemand.getStoreService
 import com.rtb.rtbdemand.sdk.RTBDemand.getWorkManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import retrofit2.Call
@@ -37,6 +38,7 @@ internal object ConfigProvider {
     private var httpClient: OkHttpClient? = null
     private var cachedConfig: SDKConfig? = null
     private var cachedCountryConfig: CountryModel? = null
+    internal val configStatus: MutableStateFlow<ConfigFetch> by lazy { MutableStateFlow(ConfigFetch.NotStarted()) }
 
     @Synchronized
     internal fun getHttpClient(): OkHttpClient {
@@ -69,24 +71,54 @@ internal object ConfigProvider {
         return countryService as CountryService
     }
 
-    internal suspend fun fetchConfig(context: Context, delay: Long? = null) = withContext(Dispatchers.IO) {
-        if (delay != null && delay < 900) return@withContext
+    internal suspend fun fetchConfig(context: Context) = withContext(Dispatchers.IO) {
+        configStatus.value = ConfigFetch.Loading()
+        var config: SDKConfig? = null
         try {
-            val constraints = Constraints.Builder().build()
-            val workerRequest: OneTimeWorkRequest = delay?.let {
-                OneTimeWorkRequestBuilder<ConfigFetchWorker>().setConstraints(constraints).setInitialDelay(it, TimeUnit.SECONDS).build()
-            } ?: kotlin.run {
-                OneTimeWorkRequestBuilder<ConfigFetchWorker>().setConstraints(constraints).build()
+            log("Fetching config for ${context.packageName}")
+            val configService = getConfigService()
+            val response = configService.getConfig(context.packageName).execute()
+            if (response.isSuccessful && response.body() != null) {
+                config = response.body()
+                setConfig(config)
+                storeConfig(context, config)
+                log("Config fetched successfully.")
+            } else {
+                log("Failed softly to fetch config.")
+                config = readConfig(context)
+                setConfig(config)
             }
-            val workName: String = delay?.let {
-                String.format("%s_%s", ConfigFetchWorker::class.java.simpleName, it.toString())
-            } ?: kotlin.run {
-                ConfigFetchWorker::class.java.simpleName
+        } catch (e: Throwable) {
+            log("Failed hard to fetch config")
+            Logger.ERROR.log(msg = e.message ?: "")
+            config = readConfig(context)
+            setConfig(config)
+        }
+        try {
+            withContext(Dispatchers.Main) {
+                val countryFetchStatus = config?.countryStatus
+                if (countryFetchStatus?.active == 1 && !countryFetchStatus.url.isNullOrEmpty()) {
+                    fetchDetectedCountry(context, countryFetchStatus.url)
+                }
+                RTBDemand.configFetched(context, config)
             }
-            val workManager = getWorkManager(context)
-            workManager.enqueueUniqueWork(workName, ExistingWorkPolicy.REPLACE, workerRequest)
         } catch (_: Throwable) {
             SDKManager.initialize(context, null)
+        }
+        configStatus.value = ConfigFetch.Completed(config)
+    }
+
+    internal fun fetchDetectedCountry(context: Context, baseUrl: String) {
+        try {
+            val constraints = Constraints.Builder().build()
+            val data = Data.Builder()
+            data.putString("URL", baseUrl)
+            val workerRequest: OneTimeWorkRequest = OneTimeWorkRequestBuilder<CountryDetectionWorker>().setConstraints(constraints).setInputData(data.build()).build()
+            val workName: String = CountryDetectionWorker::class.java.simpleName
+            val workManager = getWorkManager(context)
+            getStoreService(context)
+            workManager.enqueueUniqueWork(workName, ExistingWorkPolicy.REPLACE, workerRequest)
+        } catch (_: Throwable) {
         }
     }
 
@@ -119,30 +151,8 @@ internal object ConfigProvider {
     fun setDetectedCountry(detectedCountry: CountryModel?) {
         cachedCountryConfig = detectedCountry
     }
-}
 
-internal class FileReadWorker(private val context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
-    override suspend fun doWork(): Result {
-        return try {
-            val isConfig = inputData.getBoolean("IS_CONFIG", true)
-            if (isConfig) {
-                if (getConfig(context, false) == null) {
-                    val config = readConfig()
-                    ConfigProvider.setConfig(config)
-                }
-            } else {
-                if (ConfigProvider.getDetectedCountry(context, false) == null) {
-                    val detectedCountry = readDetectedCountry()
-                    ConfigProvider.setDetectedCountry(detectedCountry)
-                }
-            }
-            Result.success()
-        } catch (_: Throwable) {
-            Result.success()
-        }
-    }
-
-    private suspend fun readConfig(): SDKConfig? {
+    internal suspend fun readConfig(context: Context): SDKConfig? {
         return withContext(Dispatchers.IO) {
             try {
                 val configFile = File(context.applicationContext.filesDir, Files.CONFIG_FILE)
@@ -157,6 +167,42 @@ internal class FileReadWorker(private val context: Context, params: WorkerParame
             } catch (_: Throwable) {
                 null
             }
+        }
+    }
+
+    internal suspend fun storeConfig(context: Context, config: SDKConfig?) {
+        withContext(Dispatchers.IO) {
+            try {
+                val configFile = File(context.applicationContext.filesDir, Files.CONFIG_FILE)
+                val oos = ObjectOutputStream(FileOutputStream(configFile))
+                oos.writeObject(config)
+                oos.flush()
+                oos.close()
+            } catch (_: Throwable) {
+            }
+        }
+    }
+
+}
+
+internal class FileReadWorker(private val context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+    override suspend fun doWork(): Result {
+        return try {
+            val isConfig = inputData.getBoolean("IS_CONFIG", true)
+            if (isConfig) {
+                if (getConfig(context, false) == null) {
+                    val config = ConfigProvider.readConfig(context)
+                    ConfigProvider.setConfig(config)
+                }
+            } else {
+                if (ConfigProvider.getDetectedCountry(context, false) == null) {
+                    val detectedCountry = readDetectedCountry()
+                    ConfigProvider.setDetectedCountry(detectedCountry)
+                }
+            }
+            Result.success()
+        } catch (_: Throwable) {
+            Result.success()
         }
     }
 
@@ -178,90 +224,6 @@ internal class FileReadWorker(private val context: Context, params: WorkerParame
         }
     }
 }
-
-internal class ConfigFetchWorker(private val context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
-    override suspend fun doWork(): Result {
-        var config: SDKConfig? = null
-        val result = try {
-            log("Fetching config for ${context.packageName}")
-            val configService = ConfigProvider.getConfigService()
-            val response = configService.getConfig(context.packageName).execute()
-            if (response.isSuccessful && response.body() != null) {
-                config = response.body()
-                ConfigProvider.setConfig(config)
-                store(config)
-                log("Config fetched successfully.")
-                Result.success()
-            } else {
-                log("Failed softly to fetch config.")
-                config = read()
-                ConfigProvider.setConfig(config)
-                Result.success()
-            }
-        } catch (e: Throwable) {
-            log("Failed hard to fetch config")
-            Logger.ERROR.log(msg = e.message ?: "")
-            config = read()
-            ConfigProvider.setConfig(config)
-            Result.success()
-        }
-        withContext(Dispatchers.Main) {
-            if (config?.refetch != null) {
-                ConfigProvider.fetchConfig(context, config.refetch)
-            }
-            val countryFetchStatus = config?.countryStatus
-            if (countryFetchStatus?.active == 1 && !countryFetchStatus.url.isNullOrEmpty()) {
-                fetchDetectedCountry(countryFetchStatus.url)
-            }
-            RTBDemand.configFetched(context, config)
-        }
-        return result
-    }
-
-    private fun fetchDetectedCountry(baseUrl: String) {
-        try {
-            val constraints = Constraints.Builder().build()
-            val data = Data.Builder()
-            data.putString("URL", baseUrl)
-            val workerRequest: OneTimeWorkRequest = OneTimeWorkRequestBuilder<CountryDetectionWorker>().setConstraints(constraints).setInputData(data.build()).build()
-            val workName: String = CountryDetectionWorker::class.java.simpleName
-            val workManager = getWorkManager(context)
-            getStoreService(context)
-            workManager.enqueueUniqueWork(workName, ExistingWorkPolicy.REPLACE, workerRequest)
-        } catch (_: Throwable) {
-        }
-    }
-
-    private suspend fun store(config: SDKConfig?) {
-        withContext(Dispatchers.IO) {
-            try {
-                val configFile = File(context.applicationContext.filesDir, Files.CONFIG_FILE)
-                val oos = ObjectOutputStream(FileOutputStream(configFile))
-                oos.writeObject(config)
-                oos.flush()
-                oos.close()
-            } catch (_: Throwable) {
-            }
-        }
-    }
-
-    private suspend fun read(): SDKConfig? {
-        return withContext(Dispatchers.IO) {
-            try {
-                val configFile = File(context.applicationContext.filesDir, Files.CONFIG_FILE)
-                if (configFile.exists()) {
-                    val ois = ObjectInputStream(FileInputStream(configFile))
-                    ois.readObject() as? SDKConfig
-                } else {
-                    null
-                }
-            } catch (_: Throwable) {
-                null
-            }
-        }
-    }
-}
-
 
 internal class CountryDetectionWorker(private val context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
@@ -328,7 +290,9 @@ internal class CountryDetectionWorker(private val context: Context, params: Work
                 val configFile = File(context.applicationContext.filesDir, Files.COUNTRY_CONFIG_FILE)
                 if (configFile.exists()) {
                     val ois = ObjectInputStream(FileInputStream(configFile))
-                    ois.readObject() as? CountryModel
+                    val countryConfig = ois.readObject() as? CountryModel
+                    ois.close()
+                    countryConfig
                 } else {
                     null
                 }
